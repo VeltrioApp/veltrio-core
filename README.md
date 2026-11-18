@@ -23,7 +23,7 @@ file and downloads the matching artifact. Pushing a tag `vX.Y.Z` runs
 | `veltrio-core-apple-mobile.zip` | veltrio-ios | `veltrioFFI.xcframework` (device + simulator) + Swift bindings |
 | `veltrio-core-apple-mobile-tvos.zip` | veltrio-tvos | the same, with tvOS slices (nightly Rust; may be missing) |
 | `veltrio-core-android.zip` | veltrio-android, veltrio-androidtv | `.so` per ABI + Kotlin bindings |
-| `veltrio-core-windows-x64.zip` | veltrio-windows | DLL + import lib (no bindings yet) |
+| `veltrio-core-windows-x64.zip` | veltrio-windows | DLL + import lib + C# bindings (uniffi-bindgen-cs) |
 
 Build any of them locally with `scripts/package-*.sh`; they land in `dist/`.
 For an app you can also point its `scripts/fetch-core.sh` at a local

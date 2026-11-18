@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 #
-# Windows artifact: the x64 DLL, its import library and symbols, zipped as
-# dist/veltrio-core-windows-x64.zip:
+# Windows artifact: the x64 DLL, its import library and symbols, and the C#
+# bindings, zipped as dist/veltrio-core-windows-x64.zip:
 #
 #   veltrio_core.dll  veltrio_core.dll.lib  veltrio_core.pdb
+#   Bindings/veltrio.cs        (namespace uniffi.veltrio, internal types:
+#                               compiled into the app's own assembly)
 #
-# No bindings yet: UniFFI has no first-party C# generator. The Windows app
-# will pick one (uniffi-bindgen-cs) once its stack is decided.
+# UniFFI has no first-party C# generator; NordSecurity's uniffi-bindgen-cs
+# is used, at the release matching the core's UniFFI 0.29:
+#   cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs \
+#     --tag v0.10.0+v0.29.4 --locked
 #
 # Runs in Git Bash on a Windows runner (MSVC toolchain).
 set -euo pipefail
@@ -21,5 +25,7 @@ cargo build --manifest-path "$ROOT/Cargo.toml" -p veltrio-core --release --locke
 for f in veltrio_core.dll veltrio_core.dll.lib veltrio_core.pdb; do
   [ -f "$ROOT/target/$TARGET/release/$f" ] && cp "$ROOT/target/$TARGET/release/$f" "$OUT/"
 done
+echo "==> C# bindings"
+uniffi-bindgen-cs --library "$ROOT/target/$TARGET/release/veltrio_core.dll" --out-dir "$OUT/Bindings"
 (cd "$OUT" && rm -f ../veltrio-core-windows-x64.zip && 7z a -tzip -bso0 ../veltrio-core-windows-x64.zip . )
 echo "==> dist/veltrio-core-windows-x64.zip"
