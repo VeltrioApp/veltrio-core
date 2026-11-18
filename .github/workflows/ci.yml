@@ -37,8 +37,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-ndk --locked
       - run: cargo ndk --platform 26 -t arm64-v8a check -p veltrio-core --locked
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
 
   windows:
     name: Builds for Windows

@@ -6,7 +6,8 @@
 #   jniLibs/<abi>/libveltrio_core.so   arm64-v8a, armeabi-v7a, x86_64
 #   kotlin/uniffi/veltrio/veltrio.kt   (needs net.java.dev.jna:jna, aar)
 #
-# Needs the Android NDK (ANDROID_NDK_HOME) and cargo-ndk.
+# Needs the Android NDK (ANDROID_NDK_HOME or ANDROID_NDK_ROOT; GitHub's
+# Ubuntu runners set the latter) and cargo-ndk.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/dist/android"
