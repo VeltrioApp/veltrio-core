@@ -27,5 +27,18 @@ for f in veltrio_core.dll veltrio_core.dll.lib veltrio_core.pdb; do
 done
 echo "==> C# bindings"
 uniffi-bindgen-cs --library "$ROOT/target/$TARGET/release/veltrio_core.dll" --out-dir "$OUT/Bindings"
+# The core has a type named Stream (an addon stream). In the generated
+# namespace it hides System.IO.Stream, which the bindings' own byte-buffer
+# helpers use unqualified, and the file stops compiling. Qualify those uses.
+CS="$OUT/Bindings/veltrio.cs"
+sed -i.bak -E \
+  -e 's/\(this Stream stream/(this System.IO.Stream stream/' \
+  -e 's/^( *)Stream stream;/\1System.IO.Stream stream;/' \
+  -e 's/BigEndianStream\(Stream stream\)/BigEndianStream(System.IO.Stream stream)/' \
+  "$CS" && rm -f "$CS.bak"
+if grep -nE '\(this Stream |^ *Stream stream;|BigEndianStream\(Stream ' "$CS"; then
+  echo "error: unqualified System.IO.Stream left in the C# bindings (generator changed?)" >&2
+  exit 1
+fi
 (cd "$OUT" && rm -f ../veltrio-core-windows-x64.zip && 7z a -tzip -bso0 ../veltrio-core-windows-x64.zip . )
 echo "==> dist/veltrio-core-windows-x64.zip"
