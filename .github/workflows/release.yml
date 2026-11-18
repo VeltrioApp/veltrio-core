@@ -1,0 +1,114 @@
+name: Release
+
+# Pushing a tag vX.Y.Z builds every platform's artifact and publishes them
+# on the GitHub release of that tag. The apps pin a tag in core.version and
+# download from it.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tvos:
+        description: Also build tvOS (nightly toolchain, slower)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  apple:
+    name: macOS + iOS
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/package-macos.sh
+      - run: ./scripts/package-ios.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apple
+          path: |
+            dist/veltrio-core-macos.zip
+            dist/veltrio-core-apple-mobile.zip
+
+  tvos:
+    name: tvOS (nightly)
+    # tvOS is a tier-3 Rust target. Kept separate so a nightly regression
+    # can't block a release; the tvOS app pins a release that has it.
+    if: github.event_name == 'push' || inputs.tvos
+    runs-on: macos-15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+      - run: VELTRIO_TVOS=1 ./scripts/package-ios.sh
+      - run: mv dist/veltrio-core-apple-mobile.zip dist/veltrio-core-apple-mobile-tvos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tvos
+          path: dist/veltrio-core-apple-mobile-tvos.zip
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-ndk --locked
+      - run: ./scripts/package-android.sh
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/veltrio-core-android.zip
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/package-windows.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/veltrio-core-windows-x64.zip
+
+  publish:
+    name: Publish release
+    needs: [apple, android, windows, tvos]
+    # tvOS may fail (continue-on-error); everything else must succeed.
+    if: always() && needs.apple.result == 'success' && needs.android.result == 'success' && needs.windows.result == 'success' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/*.zip \
+            --repo "$GITHUB_REPOSITORY" --title "veltrio-core $GITHUB_REF_NAME" --generate-notes
