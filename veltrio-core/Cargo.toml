@@ -1,0 +1,33 @@
+[package]
+name = "veltrio-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "veltrio_core"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+tokio.workspace = true
+reqwest.workspace = true
+librqbit.workspace = true
+librqbit-dualstack-sockets = { workspace = true }
+axum.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+once_cell.workspace = true
+parking_lot.workspace = true
+uniffi.workspace = true
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi_bindgen.rs"
