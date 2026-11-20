@@ -31,3 +31,6 @@ uniffi.workspace = true
 [[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi_bindgen.rs"
+
+[target.'cfg(target_os = "android")'.dependencies]
+webpki-root-certs = "1.0.12"

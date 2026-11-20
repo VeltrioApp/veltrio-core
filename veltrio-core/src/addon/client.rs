@@ -36,7 +36,7 @@ impl StremioClient {
         // Touch the runtime once up front so the first async call doesn't pay
         // the init cost.
         let _ = runtime();
-        let http = HttpClient::builder()
+        let http = crate::http_client_builder()
             .user_agent(concat!("Veltrio/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(20))
             .connect_timeout(Duration::from_secs(8))

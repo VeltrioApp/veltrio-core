@@ -19,7 +19,7 @@ pub struct IptvClient {
 impl IptvClient {
     #[uniffi::constructor]
     pub fn new() -> Arc<Self> {
-        let http = HttpClient::builder()
+        let http = crate::http_client_builder()
             .user_agent(concat!("Veltrio-IPTV/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(60))
             .connect_timeout(Duration::from_secs(10))

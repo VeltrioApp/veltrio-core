@@ -62,7 +62,7 @@ impl AllDebridClient {
     #[uniffi::constructor]
     pub fn new() -> Arc<Self> {
         let _ = runtime();
-        let http = HttpClient::builder()
+        let http = crate::http_client_builder()
             .user_agent(concat!("Veltrio-AllDebrid/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(8))

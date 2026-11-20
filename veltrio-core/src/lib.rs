@@ -29,6 +29,21 @@ pub use debrid::AllDebridClient;
 
 static RUNTIME: OnceCell<Runtime> = OnceCell::new();
 
+/// The HTTP client builder every client starts from. On Android, reqwest's
+/// rustls checks certificates through the OS, which needs a JNI setup
+/// (rustls-platform-verifier's init_hosted) the apps don't do: there the
+/// client trusts Mozilla's root certificates, bundled, instead.
+pub(crate) fn http_client_builder() -> reqwest::ClientBuilder {
+    let builder = reqwest::Client::builder();
+    #[cfg(target_os = "android")]
+    let builder = builder.tls_certs_only(
+        webpki_root_certs::TLS_SERVER_ROOT_CERTS
+            .iter()
+            .filter_map(|der| reqwest::Certificate::from_der(der).ok()),
+    );
+    builder
+}
+
 pub(crate) fn runtime() -> &'static Runtime {
     RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
