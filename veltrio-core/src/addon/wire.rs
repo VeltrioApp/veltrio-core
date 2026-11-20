@@ -311,7 +311,7 @@ impl ExtraProp {
 
 impl MetaPreview {
     pub fn into_public(self, fallback_type: &str) -> PubPreview {
-        let name = self.name.unwrap_or_else(|| self.id.clone());
+        let name = unescape(self.name.unwrap_or_else(|| self.id.clone()));
         PubPreview {
             id: self.id,
             r#type: self.type_.unwrap_or_else(|| fallback_type.to_string()),
@@ -320,7 +320,7 @@ impl MetaPreview {
             poster_shape: self.poster_shape,
             background: self.background,
             logo: self.logo,
-            description: self.description,
+            description: self.description.map(unescape),
             imdb_rating: self.imdb_rating,
             release_info: self.release_info,
             genres: self.genres,
@@ -328,9 +328,57 @@ impl MetaPreview {
     }
 }
 
+/// Metadata sometimes arrives HTML-escaped (Cinemeta: "Judith O&apos;Dea").
+/// Decodes the named entities that show up and numeric ones.
+pub(crate) fn unescape(s: String) -> String {
+    if !s.contains('&') {
+        return s;
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s.as_str();
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        let tail = &rest[at..];
+        let decoded = tail.find(';').filter(|&end| end <= 10).and_then(|end| {
+            let entity = &tail[1..end];
+            let ch = match entity {
+                "apos" => Some('\''),
+                "quot" => Some('"'),
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "nbsp" => Some('\u{a0}'),
+                _ => entity
+                    .strip_prefix("#x")
+                    .or_else(|| entity.strip_prefix("#X"))
+                    .map(|hex| u32::from_str_radix(hex, 16).ok())
+                    .unwrap_or_else(|| entity.strip_prefix('#').and_then(|dec| dec.parse().ok()))
+                    .and_then(char::from_u32),
+            };
+            ch.map(|c| (c, end + 1))
+        });
+        match decoded {
+            Some((c, len)) => {
+                out.push(c);
+                rest = &tail[len..];
+            }
+            None => {
+                out.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+fn unescape_all(v: Vec<String>) -> Vec<String> {
+    v.into_iter().map(unescape).collect()
+}
+
 impl Meta {
     pub fn into_public(self, fallback_type: &str) -> PubMeta {
-        let name = self.name.unwrap_or_else(|| self.id.clone());
+        let name = unescape(self.name.unwrap_or_else(|| self.id.clone()));
         PubMeta {
             id: self.id,
             r#type: self.type_.unwrap_or_else(|| fallback_type.to_string()),
@@ -339,14 +387,14 @@ impl Meta {
             poster_shape: self.poster_shape,
             background: self.background,
             logo: self.logo,
-            description: self.description,
+            description: self.description.map(unescape),
             imdb_rating: self.imdb_rating,
             release_info: self.release_info,
             runtime: self.runtime,
             genres: self.genres,
-            cast: self.cast,
-            director: self.director,
-            writer: self.writer,
+            cast: unescape_all(self.cast),
+            director: unescape_all(self.director),
+            writer: unescape_all(self.writer),
             videos: self.videos.into_iter().map(Video::into_public).collect(),
         }
     }
@@ -354,19 +402,19 @@ impl Meta {
 
 impl Video {
     pub fn into_public(self) -> PubVideo {
-        let title = self.title.unwrap_or_else(|| {
+        let title = unescape(self.title.unwrap_or_else(|| {
             match (self.season, self.episode) {
                 (Some(s), Some(e)) => format!("S{s:02}E{e:02}"),
                 _ => self.id.clone(),
             }
-        });
+        }));
         PubVideo {
             id: self.id,
             title,
             season: self.season,
             episode: self.episode,
             thumbnail: self.thumbnail,
-            overview: self.overview,
+            overview: self.overview.map(unescape),
             released: self.released,
         }
     }
@@ -408,5 +456,15 @@ impl Stream {
             subtitle_languages,
             behavior_hints_json: self.behavior_hints.map(|v| v.to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod unescape_tests {
+    #[test]
+    fn html_entities_are_decoded() {
+        assert_eq!(super::unescape("Judith O&apos;Dea".into()), "Judith O'Dea");
+        assert_eq!(super::unescape("Tom &amp; Jerry &#233;t&#xE9;".into()), "Tom & Jerry été");
+        assert_eq!(super::unescape("AT&T & co &unknown; &".into()), "AT&T & co &unknown; &");
     }
 }
