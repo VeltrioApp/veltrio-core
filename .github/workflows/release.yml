@@ -13,13 +13,13 @@ on:
         type: string
         default: ""
       apple:
-        description: Build macOS + iOS (a long macOS run, billed ×10)
+        description: Build macOS + iOS
         type: boolean
         default: true
       tvos:
-        description: Also build tvOS (nightly toolchain, slower)
+        description: Also build tvOS (nightly toolchain)
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -49,11 +49,9 @@ jobs:
 
   tvos:
     name: tvOS (nightly)
-    # tvOS is a tier-3 Rust target. Kept separate so a nightly regression
-    # can't block a release; the tvOS app pins a release that has it.
-    # Opt-in (manual input, or the BUILD_TVOS org variable): it's a second
-    # full macOS build, billed at ten times its minutes on a private repo.
-    if: inputs.tvos || vars.BUILD_TVOS == 'true'
+    # tvOS is a tier-3 Rust target. Kept separate with continue-on-error so a
+    # nightly regression can't block a release; the tvOS app pins a release that has it.
+    if: github.event_name == 'push' || inputs.tvos || vars.BUILD_TVOS == 'true'
     runs-on: macos-15
     continue-on-error: true
     steps:

@@ -2,7 +2,7 @@
 
 The shared Rust core behind every Veltrio app: Stremio addon protocol,
 IPTV (M3U + Xtream Codes), the torrent engine (librqbit) and debrid
-clients, exposed to Swift and Kotlin through [UniFFI](https://mozilla.github.io/uniffi-rs/).
+clients, exposed to Swift, Kotlin and C# through [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
 ## Develop
 

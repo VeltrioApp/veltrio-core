@@ -1,8 +1,7 @@
 name: CI
 
-# Linux and Windows runners only: on a private repository a macOS minute
-# counts ten times against the Actions quota. Apple targets are built by
-# the release workflow (tags and manual runs).
+# Linux and Windows runners check tests and cross-compilation on every push.
+# Apple targets are built by the release workflow (tags and manual runs).
 on:
   push:
     branches: [main]
