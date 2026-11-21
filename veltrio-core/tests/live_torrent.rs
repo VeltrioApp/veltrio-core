@@ -37,3 +37,20 @@ async fn start_stream_returns_valid_url() {
     println!("stream url: {url}");
     assert!(url.contains("/stream/0"));
 }
+
+#[tokio::test]
+#[ignore]
+async fn start_stream_without_index_picks_the_video() {
+    // Sintel again: subtitles and a poster come before Sintel.mp4 (file 5).
+    let engine = TorrentEngine::new();
+    let url = engine
+        .start_stream(
+            "08ada5a7a6183aae1e09d831df6748d566095a10".into(),
+            vec![],
+            None,
+        )
+        .await
+        .expect("start_stream");
+    println!("stream url: {url}");
+    assert!(url.ends_with("/stream/5"), "url = {url}");
+}

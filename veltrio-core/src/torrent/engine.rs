@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -58,7 +59,7 @@ impl TorrentEngine {
     }
 
     /// Add a torrent by infohash + optional sources (announce-list), and
-    /// return a URL that streams `file_idx` (first file if `None`).
+    /// return a URL that streams `file_idx` (the largest video if `None`).
     ///
     /// The returned URL is backed by librqbit's HTTP API, which waits for
     /// metadata internally and then serves the file with Range support.
@@ -90,6 +91,9 @@ impl TorrentEngine {
         let opts = AddTorrentOptions {
             overwrite: true,
             only_files,
+            // Without an index the file is picked once the metadata is in;
+            // nothing downloads until then.
+            paused: file_idx.is_none(),
             ..Default::default()
         };
         let resp = inner_arc
@@ -97,13 +101,48 @@ impl TorrentEngine {
             .add_torrent(add, Some(opts))
             .await
             .map_err(|e| VeltrioError::Network { message: format!("add_torrent: {e}") })?;
-        if matches!(resp, AddTorrentResponse::ListOnly(_)) {
-            return Err(VeltrioError::Internal {
-                message: "unexpected ListOnly response".into(),
-            });
-        }
+        let (added, handle) = match resp {
+            AddTorrentResponse::Added(_, h) => (true, h),
+            AddTorrentResponse::AlreadyManaged(_, h) => (false, h),
+            AddTorrentResponse::ListOnly(_) => {
+                return Err(VeltrioError::Internal {
+                    message: "unexpected ListOnly response".into(),
+                })
+            }
+        };
 
-        let idx = file_idx.unwrap_or(0);
+        let idx = match file_idx {
+            Some(i) => i as usize,
+            None => {
+                let files: Vec<(String, u64)> = handle
+                    .with_metadata(|m| {
+                        m.file_infos
+                            .iter()
+                            .map(|f| (f.relative_filename.to_string_lossy().into_owned(), f.len))
+                            .collect()
+                    })
+                    .map_err(|e| VeltrioError::Internal { message: format!("metadata: {e}") })?;
+                let idx = pick_main_file(&files);
+                if added {
+                    // Files already on disk are checked first; only a
+                    // paused torrent can change its file selection.
+                    handle
+                        .wait_until_initialized()
+                        .await
+                        .map_err(|e| VeltrioError::Internal { message: format!("init: {e}") })?;
+                    let session = &inner_arc.session;
+                    session
+                        .update_only_files(&handle, &HashSet::from([idx]))
+                        .await
+                        .map_err(|e| VeltrioError::Internal { message: format!("only_files: {e}") })?;
+                    session
+                        .unpause(&handle)
+                        .await
+                        .map_err(|e| VeltrioError::Internal { message: format!("unpause: {e}") })?;
+                }
+                idx
+            }
+        };
         Ok(format!("{base_url}/torrents/{hash}/stream/{idx}"))
     }
 
@@ -241,5 +280,51 @@ mod tests {
         let m = build_magnet("c9e15763f722f23e98a29decdfae341b98d53056", &[]);
         // At least one of the baked-in fallback trackers is present.
         assert!(m.contains("tracker.opentrackr.org"));
+    }
+}
+
+const VIDEO_EXTENSIONS: &[&str] = &[
+    "mkv", "mp4", "m4v", "avi", "mov", "webm", "ts", "m2ts", "wmv", "flv", "mpg", "mpeg", "ogv",
+];
+
+/// The file to stream when the addon gave no index: the largest video, or
+/// the largest file if none looks like one (subtitles, posters and samples
+/// are small).
+fn pick_main_file(files: &[(String, u64)]) -> usize {
+    let is_video = |name: &str| {
+        name.rsplit_once('.')
+            .is_some_and(|(_, ext)| VIDEO_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+    };
+    let largest = |videos_only: bool| {
+        files
+            .iter()
+            .enumerate()
+            .filter(|(_, (name, _))| !videos_only || is_video(name))
+            .max_by_key(|(_, (_, len))| *len)
+            .map(|(i, _)| i)
+    };
+    largest(true).or_else(|| largest(false)).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod pick_tests {
+    use super::pick_main_file;
+
+    #[test]
+    fn picks_the_largest_video() {
+        let files = vec![
+            ("Sintel/Sintel.de.srt".to_string(), 1_652),
+            ("Sintel/poster.jpg".to_string(), 46_115),
+            ("Sintel/Sample.mkv".to_string(), 9_000_000),
+            ("Sintel/Sintel.MP4".to_string(), 129_241_752),
+        ];
+        assert_eq!(pick_main_file(&files), 3);
+    }
+
+    #[test]
+    fn falls_back_to_the_largest_file() {
+        let files = vec![("a.srt".to_string(), 10), ("b.bin".to_string(), 99)];
+        assert_eq!(pick_main_file(&files), 1);
+        assert_eq!(pick_main_file(&[]), 0);
     }
 }
